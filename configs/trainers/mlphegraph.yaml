@@ -1,0 +1,108 @@
+# MLPHeGraphAdapter - Early MLP Fusion + HeGraph Heterogeneous GCN
+#
+# Architecture:
+#   Stage 1: JointAdapter MLP maps concat(3x512=1536) -> 512-dim common space
+#            (applied identically to query, positive text, negative text,
+#             visual class-mean protos, and per-sample Tip-Adapter cache)
+#   Stage 2: HeGraph 3-step heterogeneous GCN with fixed meta-path weights:
+#            N <- N + beta_p2n*GCN(N,P) + beta_v2n*GCN(N,V)                 (Eq. 1-2)
+#            P <- P + alpha_p2p*GCN(P,P) + alpha_v2p*GCN(P,V) + alpha_n2p*GCN(P,N)  (Eq. 3-4)
+#            vis_bias <- GCN(V,V)  (no self-add, Eq. 5-6)
+#   Stage 3: Dual classification - text cosine logits + Tip-Adapter cache logits
+#
+# Checkpointing: uses last_epoch (not best_val) because the validation set
+# has only ~28 samples - too few for stable best-val selection in few-shot.
+#
+# Example run:
+#   python train.py \
+#     --trainer MLPHeGraphAdapter \
+#     --config-file configs/trainers/mlphegraph.yaml \
+#     --dataset-config-file configs/datasets/lunghist_descriptive.yaml \
+#     --root /path/to/datasets \
+#     --output-dir output/mlphegraph/lunghist_4shot_seed1 \
+#     DATASET.NUM_SHOTS 4 SEED 1
+#
+# Multi-seed run:
+#   python run_mlphegraph_multiseed.py --root /path/to/datasets
+
+DATALOADER:
+  TRAIN_X:
+    BATCH_SIZE: 32
+  TEST:
+    BATCH_SIZE: 32
+  NUM_WORKERS: 0
+
+INPUT:
+  # Load images at the largest FM resolution (CONCH = 448); each FM resizes
+  # internally to its own expected input size during feature extraction.
+  SIZE: (448, 448)
+  INTERPOLATION: "bicubic"
+  PIXEL_MEAN: [0.48145466, 0.4578275, 0.40821073]
+  PIXEL_STD: [0.26862954, 0.26130258, 0.27577711]
+  TRANSFORMS: ["random_resized_crop", "random_flip", "normalize"]
+
+MODEL:
+  # Number of augmented passes over the support set for prototype and cache extraction.
+  NUM_SAMPLE_EPOCHS: 10
+
+OPTIM:
+  NAME: "adamw"
+  LR: 0.0005
+  WEIGHT_DECAY: 0.01
+  MAX_EPOCH: 100
+  LR_SCHEDULER: "cosine"
+  WARMUP_EPOCH: 10
+  WARMUP_TYPE: "linear"
+
+TRAINER:
+  MLPHEGRAPH:
+    # Foundation models whose features are concatenated for early fusion
+    FM_NAMES: ["biomedclip", "plip", "conch"]
+
+    # Output dimension of JointAdapter and all GCN layers
+    COMMON_DIM: 512
+
+    # Intermediate width of the JointAdapter MLP:
+    #   Linear(1536, HIDDEN_DIM) -> GELU -> Dropout -> Linear(HIDDEN_DIM, COMMON_DIM)
+    HIDDEN_DIM: 512
+
+    # Dropout probability in JointAdapter
+    DROPOUT: 0.1
+
+    # ---- HeGraph fixed meta-path weights (Table 3 of He et al., 2024) ----
+    # These are NOT learnable - the paper shows fixed weights outperform learnable.
+    # Eq. 2:  N <- N + beta_p2n*GCN(N,P) + beta_v2n*GCN(N,V)
+    BETA_P2N: 0.5
+    BETA_V2N: 0.5
+    # Eq. 4:  P <- P + alpha_p2p*GCN(P,P) + alpha_v2p*GCN(P,V) + alpha_n2p*GCN(P,N)
+    ALPHA_P2P: 0.06
+    ALPHA_V2P: 0.24
+    # alpha_n2p is 0.2 at training time and 0.1 at test time (Sec 4.1 of the paper)
+    ALPHA_N2P_TRAIN: 0.2
+    ALPHA_N2P_TEST: 0.1
+    # Eq. 6: cache_i <- cache_i + gamma * vis_bias_class(i)
+    GAMMA: 0.5
+
+    # ---- Tip-Adapter cache settings ----
+    # lambda in the training loss: L = CE(L_text) + CACHE_RATIO * CE(L_cache)
+    CACHE_RATIO: 0.1
+    # Weight of visual cache logits in combined test prediction:
+    # output = (softmax(L_text) + CACHE_OUTPUT * softmax(L_cache)) / (1 + CACHE_OUTPUT)
+    CACHE_OUTPUT: 1.0
+
+    # ---- Cosine classification ----
+    # Initial log-temperature for both text and cache logits: exp(2.3) ~= 10
+    LOGIT_SCALE_INIT: 2.3
+
+    # Precision: "fp32" (stable) or "amp" (faster on GPU with tensor cores)
+    PREC: "fp32"
+
+TRAIN:
+  # Save a checkpoint every 10 epochs.
+  CHECKPOINT_FREQ: 10
+
+TEST:
+  # Use the final epoch checkpoint rather than best-val.
+  # Rationale: the validation set has only ~28 samples (< 4 per class for
+  # LungHist), making best-val selection unreliable in the few-shot regime.
+  FINAL_MODEL: "last_epoch"

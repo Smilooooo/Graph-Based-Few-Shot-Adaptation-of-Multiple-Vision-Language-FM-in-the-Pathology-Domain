@@ -1,0 +1,44 @@
+# =============================================================================
+# HeGraph - PLIP Backbone
+# =============================================================================
+# PLIP: Pathology Language and Image Pre-Training
+# Pre-trained on 200K pathology image-text pairs from Twitter
+# Paper: https://www.nature.com/articles/s41591-023-02504-3
+# HuggingFace: vinid/plip
+
+DATALOADER:
+  TRAIN_X:
+    BATCH_SIZE: 32
+  TEST:
+    BATCH_SIZE: 32
+  NUM_WORKERS: 0
+
+INPUT:
+  SIZE: (224, 224)
+  INTERPOLATION: "bicubic"
+  PIXEL_MEAN: [0.48145466, 0.4578275, 0.40821073]
+  PIXEL_STD: [0.26862954, 0.26130258, 0.27577711]
+  TRANSFORMS: ["random_resized_crop", "random_flip", "normalize"]
+
+MODEL:
+  BACKBONE:
+    NAME: "plip"
+  NUM_SAMPLE_EPOCHS: 10
+
+OPTIM:
+  NAME: "adamw"
+  LR: 0.001
+  MAX_EPOCH: 30
+  LR_SCHEDULER: "cosine"
+  WARMUP_EPOCH: 1
+  WARMUP_TYPE: "constant"
+  WARMUP_CONS_LR: 1e-5
+
+TRAINER:
+  COOP:
+    PREC: "fp32"
+
+TRAIN:
+  CHECKPOINT_FREQ: 10
+
+SEED: 1

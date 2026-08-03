@@ -1,0 +1,69 @@
+# ─── Python ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# ─── Experiment outputs, results, checkpoints (large / reproducible) ───
+# output/ is ~42 GB, the repository-results dir ~8 GB — never commit these
+output/
+ctfig_mvc_shared_crossmodal_prior_repository_results/
+baseline_results/
+*.pth
+*.pth.tar
+*.ckpt
+*.pt
+*.npz
+*.pkl
+
+# ─── Generated figures (reproducible from the plot scripts) ───
+visualizations/*.png
+visualizations/*.pdf
+
+# ─── Data (lives outside the repo, passed via --root) ───
+data/
+DATA/
+
+# ─── Archived / reference code (un-ignore if you want them tracked) ───
+not used anymore/
+GraphAdapterOriginalUntouched/
+
+# ─── LaTeX build artifacts (in case you compile locally) ───
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.glg
+*.glo
+*.gls
+*.glg-abr
+*.gls-abr
+*.glo-abr
+*.ist
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.thm
+*.toc
+*.log
+output.*
+
+# ─── Thesis LaTeX source (kept in Overleaf, not in this code repo) ───
+*.tex
+*.sty
+*.cls
+*.bib
+Images/
+
+# ─── OS / editor ───
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

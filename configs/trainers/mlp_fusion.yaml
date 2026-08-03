@@ -1,0 +1,43 @@
+# MLP Fusion Baseline config
+#
+# This is FEATURE FUSION, not an ensemble:
+# - Ensemble: multiple models → multiple predictions → vote/average
+# - Fusion: multiple models → concatenate features → single classifier
+#
+# Uses unified preprocessing (224x224, CLIP normalization) for all backbones.
+# CONCH was trained on 448x448 but will work on 224x224 (minor quality tradeoff).
+
+TRAINER:
+  NAME: MLPFusionBaseline
+  HEGRAPH:
+    MLP_DROPOUT: 0.1
+  COOP:
+    PREC: fp32
+
+MODEL:
+  BACKBONE:
+    NAME: biomedclip  # Not actually used since we load all 3
+
+INPUT:
+  SIZE: (448, 448)
+  INTERPOLATION: "bicubic"
+  PIXEL_MEAN: [0.48145466, 0.4578275, 0.40821073]
+  PIXEL_STD: [0.26862954, 0.26130258, 0.27577711]
+  TRANSFORMS: ["random_resized_crop", "random_flip", "normalize"]
+
+OPTIM:
+  NAME: adamw
+  LR: 0.001
+  WEIGHT_DECAY: 0.01
+  MAX_EPOCH: 60
+  LR_SCHEDULER: cosine
+
+DATALOADER:
+  TRAIN_X:
+    BATCH_SIZE: 32
+  TEST:
+    BATCH_SIZE: 32
+  NUM_WORKERS: 0
+
+TRAIN:
+  PRINT_FREQ: 10

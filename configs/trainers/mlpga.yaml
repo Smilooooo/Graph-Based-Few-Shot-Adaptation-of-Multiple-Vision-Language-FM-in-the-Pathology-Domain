@@ -1,0 +1,79 @@
+# MLPGA - Multi-FM Early Fusion + Faithful GraphAdapter Prototype Refinement
+#
+# Architecture:
+#   Stage 1: JointAdapter MLP maps concat(3x512=1536) -> 512-dim common space
+#            (applied identically to queries, visual protos, and text protos)
+#   Stage 2: GCN_tt refines text prototypes via an all-class text graph [C, 512]
+#            GCN_it for each class c: text_c (node 0) + all visual protos -> text_c refined
+#            Fixed alpha blends GCN_tt vs GCN_it; fixed beta adds text residual
+#            Query passes through JointAdapter only - not injected into any graph.
+#   Stage 3: L2-normalise + cosine classifier with learnable temperature
+#
+# Key difference from MLPGraphAdapter (mlpgraph):
+#   mlpgraph injects the query into GCN_it and refines it.
+#   This model (mlpga) refines ONLY text prototypes, matching the GraphAdapter paper.
+#
+# Example run:
+#   python train.py \
+#     --trainer MLPGAFaithful \
+#     --config-file configs/trainers/mlpga.yaml \
+#     --dataset-config-file configs/datasets/lunghist_descriptive.yaml \
+#     --root /path/to/datasets \
+#     --output-dir output/mlpga_experiments/lunghist_4shot_seed1 \
+#     DATASET.NUM_SHOTS 4 SEED 1
+#
+# Multi-seed run:
+#   python run_mlpga_multiseed.py --root /path/to/datasets
+
+DATALOADER:
+  TRAIN_X:
+    BATCH_SIZE: 32
+  TEST:
+    BATCH_SIZE: 32
+  NUM_WORKERS: 0
+
+INPUT:
+  SIZE: (448, 448)
+  INTERPOLATION: "bicubic"
+  PIXEL_MEAN: [0.48145466, 0.4578275, 0.40821073]
+  PIXEL_STD: [0.26862954, 0.26130258, 0.27577711]
+  TRANSFORMS: ["random_resized_crop", "random_flip", "normalize"]
+
+MODEL:
+  NUM_SAMPLE_EPOCHS: 10
+
+OPTIM:
+  NAME: "adamw"
+  LR: 0.0005
+  WEIGHT_DECAY: 0.01
+  MAX_EPOCH: 100
+  LR_SCHEDULER: "cosine"
+  WARMUP_EPOCH: 10
+  WARMUP_TYPE: "linear"
+
+TRAINER:
+  MLPGA:
+    FM_NAMES: ["biomedclip", "plip", "conch"]
+
+    COMMON_DIM: 512
+    HIDDEN_DIM: 512
+
+    # Fixed scalar (not learnable). alpha weights the ORIGINAL adapted text
+    # feature in the residual:  z*_t = alpha*z_t + (1-alpha)*z'_t
+    # Paper optimal alpha = 0.6.
+    ALPHA_IT: 0.6
+
+    # Fixed scalar (not learnable). beta weights the text (tt) stream when
+    # fusing the two GCN outputs:  z'_t = beta*z_tt + (1-beta)*z_vt
+    # Paper optimal beta = 0.7.
+    BETA_TT: 0.7
+
+    DROPOUT: 0.1
+    LOGIT_SCALE_INIT: 2.3
+    PREC: "fp32"
+
+TRAIN:
+  CHECKPOINT_FREQ: 10
+
+TEST:
+  FINAL_MODEL: "last_epoch"

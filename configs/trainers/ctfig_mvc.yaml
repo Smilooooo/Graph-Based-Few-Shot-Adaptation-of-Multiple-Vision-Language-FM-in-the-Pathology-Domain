@@ -1,0 +1,82 @@
+# CrossFM Transductive Instance Graph — Multi-View Cosine (CTFIG-MVC)
+#
+# Architecture overview
+# ---------------------
+#   Same multi-view support extraction as CTFIG-MV (each augmented view = 1 node),
+#   but replaces the MLP classification head with a cosine head:
+#
+#   After graph refinement:
+#     V_inst_refined -> pool per class -> blend with T_refined -> cosine logits
+#
+#   Learnable params: alpha_v, alpha_t, gate_vt, logit_scale  (4 scalars)
+#   vs MLP: ~1.18M params  ->  much less overfitting at low shot counts
+#
+# Key ablation knobs
+# ------------------
+#   TRAINER.CTFIG.NUM_GNN_LAYERS 0         -> no graph (pure cosine ProtoNet baseline)
+#   TRAINER.CTFIG.USE_CROSSFM_GNN False    -> disable cross-FM edges
+#   TRAINER.CTFIG.USE_INTRAMODAL_GNN False -> disable V->V and T->T edges
+#   TRAINER.CTFIG.USE_CROSSMODAL_GNN False -> disable T->V and V->T edges
+#   TRAINER.CTFIG.GATE_VT_INIT 100.0      -> pure visual prototype classification
+#   TRAINER.CTFIG.GATE_VT_INIT -100.0     -> pure text prototype classification
+
+DATALOADER:
+  TRAIN_X:
+    BATCH_SIZE: 32
+  TEST:
+    BATCH_SIZE: 32
+  NUM_WORKERS: 0
+
+INPUT:
+  SIZE: (448, 448)
+  INTERPOLATION: "bicubic"
+  PIXEL_MEAN: [0.48145466, 0.4578275, 0.40821073]
+  PIXEL_STD: [0.26862954, 0.26130258, 0.27577711]
+  TRANSFORMS: ["random_resized_crop", "random_flip", "normalize"]
+
+MODEL:
+  NUM_SAMPLE_EPOCHS: 10
+
+OPTIM:
+  NAME: "adamw"
+  LR: 0.0005
+  WEIGHT_DECAY: 0.01
+  MAX_EPOCH: 100
+  LR_SCHEDULER: "cosine"
+  WARMUP_EPOCH: 10
+  WARMUP_TYPE: "linear"
+
+TRAINER:
+  CTFIG:
+    FM_NAMES: ["biomedclip", "plip", "conch"]
+
+    NUM_GNN_LAYERS: 1
+    TOP_K: 3
+    DROPOUT: 0.1
+
+    # Cosine head parameters (replaces MLP_HIDDEN_DIM)
+    ALPHA_V_INIT: 0.5        # residual blend: refined vs raw visual proto
+    ALPHA_T_INIT: 0.5        # residual blend: refined vs raw text proto
+    GATE_VT_INIT: 0.0        # sigmoid(0.0)=0.5 -> equal visual/text blend at init
+    LOGIT_SCALE_INIT: 2.3   # exp(2.3) ≈ 10, standard CLIP temperature
+
+    GATE_CV_INIT: 0.0
+    GATE_CT_INIT: 0.0
+    GATE_XV_INIT: 0.0
+    GATE_XT_INIT: 0.0
+
+    LABEL_SMOOTHING: 0.1
+
+    USE_INTRAMODAL_GNN: True
+    USE_CROSSMODAL_GNN: True
+    USE_CROSSFM_GNN: True
+    USE_TRANSDUCTIVE: True   # set False via CLI to run non-transductive ablation
+
+    SHARE_CROSSMODAL_W: True
+    PREC: "fp32"
+
+TRAIN:
+  CHECKPOINT_FREQ: 10
+
+TEST:
+  FINAL_MODEL: "last_epoch"
