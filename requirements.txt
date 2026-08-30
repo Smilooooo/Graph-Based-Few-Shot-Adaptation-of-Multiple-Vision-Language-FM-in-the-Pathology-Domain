@@ -1,0 +1,29 @@
+# Python dependencies for the thesis code.
+#
+# Reference environment (results in the thesis were produced with this):
+#   OS      : Windows 11
+#   Python  : 3.11.8
+#   CUDA    : 12.1
+#   PyTorch : 2.5.1+cu121
+#
+# PyTorch is installed separately so the correct CUDA build is fetched, e.g.:
+#   pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
+# (torchvision 0.20.1 is the build matching torch 2.5.1.)
+#
+# Dassl is NOT on PyPI — install it from source (see README §2):
+#   git clone https://github.com/KaiyangZhou/Dassl.pytorch.git
+#   cd Dassl.pytorch && pip install -r requirements.txt && python setup.py develop
+
+# --- pinned to the reference environment ---
+torch==2.5.1
+torchvision==0.20.1
+transformers==5.2.0
+scikit-learn==1.5.2
+numpy==1.26.4
+
+# --- not version-captured; any recent release is expected to work ---
+matplotlib
+tqdm
+ftfy
+regex
+Pillow
